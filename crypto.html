@@ -1,0 +1,197 @@
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/js/bootstrap.bundle.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css"
+    integrity="sha384-tKLJeE1ALTUwtXlaGjJYM3sejfssWdAaWR2s97axw4xkiAdMzQjtOjgcyw0Y50KU" crossorigin="anonymous">
+
+<script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.js"
+    integrity="sha256-8L3yX9qPmvWSDIIHB3WGTH4RZusxVA0DDmuAo4LjnOE=" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/vue@next"></script>
+
+<style>
+    .highlight.warning {
+        background-color: lightpink;
+    }
+
+    .highlight.success {
+        background-color: lightgreen;
+    }
+
+    .larger {
+        font-size: x-large;
+    }
+
+    .compromised {
+        background-color: lightpink;
+    }
+</style>
+
+<body>
+    <div class="container" id="btcsim">
+        <div>
+            <btc-block v-for="(root, i) in blocks" :title="'Block #' + (i + 1)" :root="root" difficulty=3 @block-frozen="onBlockFrozen"></btc-block>
+        </div>
+    </div>
+
+    <script>
+        const BTCSim = {
+            data() {
+                return {
+                    blocks: ['']
+                }
+            },
+            methods: {
+                onBlockFrozen(hash) {
+                    this.blocks = this.blocks.concat([hash])
+                }
+            }
+        }
+
+        app = Vue.createApp(BTCSim)
+
+        app.component('btc-block', {
+            props: {
+                difficulty: Number,
+                root: String,
+                title: String
+            },
+            emits: ['blockFrozen'],
+            data() {
+                return {
+                    text: "",
+                    frozen: false,
+                    compromised: false,
+                }
+            },
+            computed: {
+                bprefix() {
+                    return this.bhash.substr(0, this.difficulty)
+                },
+                target() {
+                    return Array(parseInt(this.difficulty)).fill('0').join('')
+                },
+                success() {
+                    return this.bprefix == this.target
+                },
+                hash() {
+                    return sha256(this.text)
+                },
+                bhash() {
+                    return hextobin(this.hash)
+                },
+                nonce() {
+                    index = this.text.lastIndexOf('\n')
+                    if (index < 0)
+                        return undefined
+                    nonce_cand = this.text.substr(index + 1)
+                    if (!/^\d+$/.test(nonce_cand))
+                        return undefined
+                    return parseInt(nonce_cand)
+                },
+                payload() {
+                    index = this.text.lastIndexOf('\n')
+                    if (index < 0) {
+                        return this.text
+                    } else {
+                        index = this.text.lastIndexOf('\n')
+                        return this.text.substr(0, index)
+                    }
+                },
+            },
+            mounted() {
+                if (this.root) this.text = this.root + '\n'
+            },
+            methods: {
+                sha256(input) {
+                    return CryptoJS.SHA256(input).toString()
+                },
+                add_data() {
+                    this.text = this.payload + '\n' +
+                        gen_transaction() + '\n' +
+                        (this.nonce || '')
+                },
+                inc_nonce() {
+                    if (!this.nonce) {
+                        filler = this.text.slice(-1) != '\n' ? '\n' : ''
+                        this.text = this.text + filler + '1'
+                    } else {
+                        index = this.text.lastIndexOf('\n') + 1
+                        this.text = this.payload + '\n' + (this.nonce + 1)
+                    }
+                },
+                find_nonce() {
+                    this.inc_nonce()
+                    if (!this.success) {
+                        new Promise(_ => setTimeout(_, 100)).then(() => this.find_nonce())
+                    }
+                },
+                freeze() {
+                    this.frozen = true
+                    this.$emit('blockFrozen', this.hash)
+                },
+                compromise() {
+                    this.compromised = true
+                }
+            },
+            template: `        <div class="card">
+            <div class="card-header">
+                <h1>
+                    {{title}}
+                </h1>
+                <tiny>Root: {{ root }}</tiny>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <textarea style="width: 100%" rows="10" v-model="text" :class="compromised? 'compromised': undefined" :disabled="frozen && !compromised"></textarea>
+                        <div class="d-flex">
+                            <button class="btn btn-secondary col-2" @click="add_data()" :disabled="frozen"><i class="larger bi-plus-circle"></i></button>
+                            <button class="btn btn-secondary col-2" @click="inc_nonce()" :disabled="frozen && !compromised"><i class="larger bi-arrow-clockwise"></i></button>
+                            <button class="btn btn-secondary col-2" @click="find_nonce()" :disabled="frozen && !compromised"><i class="larger bi-arrow-repeat"></i></button>
+                            <button class="btn btn-primary col-2" @click="freeze()" :disabled='!success || frozen'><i class="larger bi-box-arrow-right"></i></button>
+                            <span class="col-2"></span>
+                            <button class="btn btn-danger col-2" @click="compromise()" :disabled='!frozen'><i class="larger bi-lightning-charge"></i></button>
+                            <!--button class="btn btn-danger" @click="break()" :disabled='!frozen'><i class="larger bi-lightning"></i></button-->
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <p><b>{{ hash }}</b></p>
+                        <p><span class="highlight" :class="success? 'success' : 'warning'">{{ bhash.substr(0, difficulty) }}</span>{{ bhash.substr(difficulty) }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>`
+        })
+
+        app.mount('#btcsim')
+
+        function sha256(input) {
+            return CryptoJS.SHA256(input).toString()
+        }
+
+        function hextobin(hex) {
+            chunksize = 1
+            return Array(hex.length / chunksize).fill(0).map(
+                (_, i) => hex.substr(chunksize * i, chunksize)
+            ).map(
+                e => (parseInt(e, 16).toString(2)).padStart(4 * chunksize, '0')
+            ).join('')
+        }
+
+        function gen_transaction() {
+            actor_list = Array.from("ABCDEFGHJKLMNOPQRSTUVXYZ")
+            actors = rand_pop(actor_list, 2)
+            amount = Math.floor(Math.random() * 10000) / 1000
+            return actors[0] + ' => ' + actors[1] + ': ' + amount
+        }
+
+        function rand_pop(arr, n) {
+            index = Math.floor(Math.random() * arr.length)
+            value = [arr[index]]
+            if (index + 1 == arr.length) arr.pop()
+            else arr[index] = arr.pop()
+            if (n == 1) return value
+            else return value + this.rand_pop(arr, n - 1)
+        }
+    </script>
+
+</body>
