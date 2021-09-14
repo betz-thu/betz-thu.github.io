@@ -34,7 +34,7 @@
 <body>
     <div class="container" id="btcsim">
         <div>
-            <btc-block v-for="(root, i) in blocks" :title="'Block #' + (i + 1)" :root="root" difficulty=3 @block-frozen="onBlockFrozen"></btc-block>
+            <btc-block title="sha256" :root="" difficulty=0 nocontrols></btc-block>
         </div>
     </div>
 
@@ -58,7 +58,8 @@
             props: {
                 difficulty: Number,
                 root: String,
-                title: String
+                title: String,
+                nocontrols: Boolean
             },
             emits: ['blockFrozen'],
             data() {
@@ -143,13 +144,12 @@
                 <h1>
                     {{title}}
                 </h1>
-                <tiny>Root: {{ root }}</tiny>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-6">
                         <textarea style="width: 100%" rows="10" v-model="text" :class="compromised? 'compromised': undefined" :disabled="frozen && !compromised"></textarea>
-                        <div class="d-flex">
+                        <div v-if="nocontrols != true" class="d-flex">
                             <button class="btn btn-secondary col-2" @click="add_data()" :disabled="frozen"><i class="larger bi-plus-circle"></i></button>
                             <button class="btn btn-secondary col-2" @click="inc_nonce()" :disabled="frozen && !compromised"><i class="larger bi-arrow-clockwise"></i></button>
                             <button class="btn btn-secondary col-2" @click="find_nonce()" :disabled="frozen && !compromised"><i class="larger bi-arrow-repeat"></i></button>
