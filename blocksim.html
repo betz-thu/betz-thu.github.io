@@ -34,7 +34,7 @@
 <body>
     <div class="container" id="btcsim">
         <div>
-            <btc-block v-for="(root, i) in blocks" :title="'Block #' + (i + 1)" :root="root" difficulty=3 @block-frozen="onBlockFrozen"></btc-block>
+            <btc-block v-for="(root, i) in blocks" :title="'Block #' + (i + 1)" :root="root" difficulty=8 @block-frozen="onBlockFrozen"></btc-block>
         </div>
     </div>
 
